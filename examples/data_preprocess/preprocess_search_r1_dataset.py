@@ -30,16 +30,35 @@ logger = logging.getLogger(__name__)
 
 # Configuration constants
 DEFAULT_SYSTEM_CONTENT = "You are a helpful and harmless assistant."
-DEFAULT_USER_CONTENT_PREFIX = (
-    "Answer the given question. You must conduct reasoning inside <think> and </think> "
-    "first every time you get new information. After reasoning, if you find you lack "
-    "some knowledge, you can call a search engine by <tool_call> query </tool_call> "
-    "and it will return the top searched results between <tool_response> and "
-    "</tool_response>. You can search as many times as your want. If you find no "
-    "further external knowledge needed, you can directly provide the answer inside "
-    "<answer> and </answer>, without detailed illustrations. For example, "
-    "<answer> Beijing </answer>. Question: "
-)
+DEFAULT_USER_CONTENT_PREFIX = """\
+Your task is to retrieve knowledge from the knowledge base to answer the given question.
+
+You must follow this conversational protocol exactly:
+  - Reason in <think>...</think>: list steps and immediate plan for the next retrieval(s).
+  - Issue a retrieval with the search tool: provide ONE complete natural-language query (a full question) suitable for a dense retriever (FAISS).
+  - After each retrieval, you MUST wait for external <tool_response>...</tool_response> before continuing. Do not proceed or speculate until information is received.
+  - When ready to conclude, reply in <answer>...</answer>. Keep your answer as concise as possible (such as <answer>Beijing</answer>, <answer>1997</answer>, <answer>yes</answer>).
+  - Every step must begin with <think> before issuing <tool_call> or <answer>.
+
+Search guidance and KB metadata:
+  - Queries must be natural-language questions (no keywords, no fragments). e.g. "Who is the author X?" not "author X".
+  - The KB was last updated in 2018.
+  - Documents with identical titles should be treated as parts of the same entry and may be combined when explicitly supported by their content. Otherwise treat docs independently.
+
+Granularity and commonsense:
+  - When the question requires multiple reasoning hops, decompose it into smaller sub-questions and search sequentially for the information needed at each hop.
+  - You may use common-sense (general knowledge a broadly-educated adult would know) to guide reasoning, formulate searches, or fill obvious gaps — but mark its use in <think> (e.g., "using commonsense: ...").
+
+Entity disambiguation and query rephrasing:
+  - If the question is ambiguous, infer the likely entity type (person/place/org/work) and include that type as a constraint in your query.
+  - If <tool_response> lacks the target, retry with rephrasing: use synonyms or near-synonyms, reverse the relation (e.g., "Who founded X" ↔ "Who is the founder of X"), or adjust the information granularity (broaden or narrow the scope). Do not use the same query twice.
+
+Behavioral rules:
+  - Do not invent facts. Only assert in <answer> what follows from retrieved documents or clearly-marked commonsense used.
+  - Keep all text outside the tags minimal and task-focused.
+
+Question: \
+"""
 
 
 def process_single_row(row, current_split_name, row_index):
@@ -106,20 +125,23 @@ def main():
 
     # Download and process files using temporary directory
     with tempfile.TemporaryDirectory() as tmp_download_dir:
-        for split in ["train", "test"]:
+        for split in ["train", "filtered_test"]:
             parquet_filename = f"{split}.parquet"
             logger.info(f"Processing {split} split...")
 
             try:
-                # Download Parquet file from HuggingFace
-                logger.info(f"Downloading {parquet_filename} from {args.hf_repo_id}")
-                local_parquet_filepath = hf_hub_download(
-                    repo_id=args.hf_repo_id,
-                    filename=parquet_filename,
-                    repo_type="dataset",
-                    local_dir=tmp_download_dir,
-                    local_dir_use_symlinks=False,
-                )
+                if split == "train":
+                    # Download Parquet file from HuggingFace
+                    logger.info(f"Downloading {parquet_filename} from {args.hf_repo_id}")
+                    local_parquet_filepath = hf_hub_download(
+                        repo_id=args.hf_repo_id,
+                        filename=parquet_filename,
+                        repo_type="dataset",
+                        local_dir=tmp_download_dir,
+                        local_dir_use_symlinks=False,
+                    )
+                else:
+                    local_parquet_filepath = os.path.join(local_save_dir, f"{split}.parquet")
 
                 # Load and process Parquet file
                 df_raw = pd.read_parquet(local_parquet_filepath)
