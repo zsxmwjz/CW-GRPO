@@ -292,9 +292,14 @@ class TaskRunner:
         reward_fn = load_reward_manager(
             config, tokenizer, num_examine=0, **config.reward_model.get("reward_kwargs", {})
         )
+        reward_model_name = config.reward_model.get("reward_manager", "naive")
+
+        # use naive reward manager for validation
+        config.reward_model["reward_manager"] = "naive"
         val_reward_fn = load_reward_manager(
-            config, tokenizer, num_examine=1, **config.reward_model.get("reward_kwargs", {})
+            config, tokenizer, num_examine=1
         )
+        config.reward_model["reward_manager"] = reward_model_name
 
         resource_pool_manager = self.init_resource_pool_mgr(config)
 

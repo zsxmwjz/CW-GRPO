@@ -106,6 +106,8 @@ class AdvantageEstimator(str, Enum):
     RLOO_VECTORIZED = "rloo_vectorized"
     GRPO_VECTORIZED = "grpo_vectorized"
 
+    CW_GRPO = "cw-grpo"
+
 
 ADV_ESTIMATOR_REGISTRY: dict[str, Any] = {}
 
@@ -326,6 +328,82 @@ def compute_grpo_outcome_advantage(
         scores = scores.unsqueeze(-1) * response_mask
 
     return scores, scores
+
+
+@register_adv_est(AdvantageEstimator.CW_GRPO)
+def compute_cw_grpo_advantage(
+    token_level_rewards: torch.Tensor,
+    outcome_rewards: torch.Tensor,
+    contribution_tensor: torch.Tensor,
+    eos_mask: torch.Tensor,
+    index: torch.Tensor,
+    epsilon: float = 1e-6,
+    norm_adv_by_std_in_grpo: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    contribution_tensor: the contribution of each round except the last round
+    If grpo_advantage > 0, scale the advantages of non-last rounds by contributions, and keep the last round advantages unchanged.
+    If grpo_advantage < 0, keep the advantages of all rounds unchanged.
+    """
+    # compute the original GRPO advantage
+    advantages, returns = compute_grpo_outcome_advantage(
+        outcome_rewards.unsqueeze(-1), eos_mask, index, epsilon, norm_adv_by_std_in_grpo
+    )
+
+    bsz, seq_len = eos_mask.shape
+    contribution_broadcast = torch.zeros_like(contribution_tensor, dtype=torch.float32)
+    last_round_mask = torch.zeros_like(eos_mask, dtype=torch.float32)
+
+    with torch.no_grad():
+        for i in range(bsz):
+            # rounds: list of tuples, each tuple contains (start, end, contribution_val)
+            rounds = []
+            in_round = False
+            start = None
+            for t in range(seq_len):
+                if eos_mask[i, t] == 1:
+                    if not in_round:
+                        in_round = True
+                        start = t
+                elif in_round:
+                    end = t
+                    contribution_val = contribution_tensor[i, end - 1]
+                    rounds.append((start, end, contribution_val))
+                    in_round = False
+            if in_round:
+                end = seq_len
+                contribution_val = contribution_tensor[i, end - 1]
+                rounds.append((start, end, contribution_val))
+
+            if len(rounds) == 0:
+                continue
+            rounds_wo_last = rounds[:-1] # last round is not involved in advantage reallocation
+            last_round_mask[i, rounds[-1][0]:rounds[-1][1]] = 1
+            if len(rounds_wo_last) == 0:
+                continue
+
+            # extract the scalar advantage value
+            grpo_adv = None
+            for t in range(seq_len):
+                if eos_mask[i, t] == 1:
+                    grpo_adv = advantages[i, t].item()
+                    break
+
+            orig_contributions = torch.tensor([r[2].item() for r in rounds_wo_last], dtype=torch.float32, device=contribution_tensor.device)
+            if grpo_adv < 0:
+                new_contributions = torch.ones_like(orig_contributions) / len(rounds_wo_last)
+            else:
+                new_contributions = orig_contributions
+            
+            # broadcast contributions to each token except the last round
+            for round_idx, (start, end, _) in enumerate(rounds_wo_last):
+                contribution_val = new_contributions[round_idx]
+                contribution_broadcast[i, start:end] = contribution_val * len(rounds_wo_last)
+
+        # scale the advantages of non-last rounds by contributions, and keep the last round advantages unchanged
+        advantages = advantages * contribution_broadcast + advantages * last_round_mask
+
+    return advantages, returns
 
 
 @register_adv_est(AdvantageEstimator.GRPO_VECTORIZED)

@@ -178,6 +178,21 @@ def compute_response_mask(data: DataProto):
     return attention_mask[:, -response_length:]
 
 
+def extract_judge_reward_tensor(judge_results, reward_key: str, round_last_token_mask: torch.Tensor):
+    reward = torch.zeros_like(round_last_token_mask, dtype=torch.float32)
+    for i in range(round_last_token_mask.shape[0]):
+        round_idx = 0
+        for j in range(round_last_token_mask.shape[1]):
+            if round_last_token_mask[i, j]:
+                try:
+                    reward[i, j] = judge_results[i][round_idx][reward_key]
+                except Exception as e:
+                    print(f"Error extracting judge reward. round_idx: {round_idx}, judge_results: {judge_results[i]}")
+                    raise e
+                round_idx += 1
+    return reward
+
+
 def compute_advantage(
     data: DataProto,
     adv_estimator: AdvantageEstimator,
@@ -236,6 +251,52 @@ def compute_advantage(
             response_mask=grpo_calculation_mask,
             index=data.non_tensor_batch["uid"],
             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
+        )
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
+    elif adv_estimator == AdvantageEstimator.CW_GRPO:
+        token_level_rewards = data.batch["token_level_rewards"]
+        round_last_token_mask = data.batch["round_last_token_mask"]
+        answer_reward = torch.tensor(data.non_tensor_batch["answer_reward"])
+        judge_results = data.non_tensor_batch["judge_results"]
+        retrieval_reward = extract_judge_reward_tensor(judge_results, "retrieval_reward", round_last_token_mask)
+        thinking_reward = extract_judge_reward_tensor(judge_results, "thinking_reward", round_last_token_mask)
+        index = data.non_tensor_batch["uid"]
+        response_mask = data.batch["response_mask"]
+        round_last_token_mask = data.batch["round_last_token_mask"]
+
+        # identify the search rounds
+        last_token_idx = round_last_token_mask.shape[-1] - 1 - (torch.flip(round_last_token_mask, dims=[-1]).float().cumsum(-1) == 1).float().argmax(-1)
+        prefix_round_last_token_mask = round_last_token_mask.clone()
+        for i in range(round_last_token_mask.shape[0]):
+            prefix_round_last_token_mask[i, last_token_idx[i]] = 0
+
+        # compute the contribution tensor
+        batch_size = data.batch.batch_size[0]
+        contribution_tensor = torch.zeros_like(token_level_rewards, dtype=torch.float32)
+        for i in range(batch_size):
+            if torch.any(prefix_round_last_token_mask[i]):                
+                contribution_tensor[i] = retrieval_reward[i] * thinking_reward[i]
+                if gamma >= 10: # treat large gamma as infinity
+                    contribution_tensor[i] = contribution_tensor[i] / torch.clamp(contribution_tensor[i].sum(), min=1e-6)
+                else:
+                    contribution_values = contribution_tensor[i][prefix_round_last_token_mask[i]]
+                    exps = torch.exp(gamma * (contribution_values - contribution_values.max()))
+                    sum_exps = exps.sum()
+                    softmaxed = exps / sum_exps
+                    contribution_tensor[i][prefix_round_last_token_mask[i]] = softmaxed
+
+        adv_estimator_fn = core_algos.get_adv_estimator_fn(adv_estimator)
+        kwargs = {}
+        kwargs["norm_adv_by_std_in_grpo"] = norm_adv_by_std_in_grpo
+        kwargs["outcome_rewards"] = answer_reward
+        advantages, returns = adv_estimator_fn(
+            token_level_rewards=token_level_rewards,
+            contribution_tensor=contribution_tensor,
+            eos_mask=response_mask,
+            index=index,
+            epsilon=1e-6,
+            **kwargs
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns

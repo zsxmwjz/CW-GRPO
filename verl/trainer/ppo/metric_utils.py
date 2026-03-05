@@ -77,6 +77,35 @@ def _compute_response_info(batch: DataProto) -> dict[str, Any]:
     )
 
 
+def compute_avg_judge_reward(judge_results, field, include_last=True):
+            """
+            Compute the average value of `field` across judge_results for each sample.
+
+            Args:
+                judge_results: np.array shape (batch,), each element is a list of dicts
+                field: str, the key to extract from each dict
+                include_last: bool, if False, exclude the last element of each sample when computing the mean
+
+            Returns:
+                np.array of averages, shape (batch,)
+            """
+            averages = []
+            for sample in judge_results:
+                if sample is not None and len(sample) > 0:
+                    if not include_last and len(sample) > 1:
+                        values = [x.get(field, 0.0) for x in sample[:-1]]
+                    else:
+                        values = [x.get(field, 0.0) for x in sample]
+                    if len(values) > 0:
+                        avg = np.mean(values)
+                    else:
+                        avg = 0.0
+                else:
+                    avg = 0.0
+                averages.append(avg)
+            return np.array(averages, dtype=np.float32)
+
+
 def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str, Any]:
     """
     Computes various metrics from a batch of data for PPO training.
@@ -207,6 +236,16 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         "prompt_length/min": torch.min(prompt_length).detach().item(),
         "prompt_length/clip_ratio": torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
     }
+
+    if "judge_results" in batch.non_tensor_batch:
+        judge_results = batch.non_tensor_batch["judge_results"]
+        retrieval_reward = compute_avg_judge_reward(judge_results, "retrieval_reward", include_last=False)
+        thinking_reward = compute_avg_judge_reward(judge_results, "thinking_reward")
+        answer_reward = batch.non_tensor_batch["answer_reward"]
+
+        metrics["critic/retrieval_reward/mean"] = retrieval_reward.mean()
+        metrics["critic/thinking_reward/mean"] = thinking_reward.mean()
+        metrics["critic/answer_reward/mean"] = answer_reward.mean()
 
     # multi-turn conversation
     if "__num_turns__" in batch.non_tensor_batch:
