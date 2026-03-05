@@ -106,3 +106,25 @@ def get_named_tensor_buckets(
 
     if current_bucket:
         yield current_bucket
+
+def get_round_last_token_mask(response_mask: torch.Tensor) -> torch.Tensor:
+    """
+    Get the round last token mask from the response mask.
+    """
+    round_last_token_mask = torch.zeros_like(response_mask, dtype=torch.bool)
+    for i in range(response_mask.shape[0]):
+        mask = response_mask[i].cpu().numpy()
+        # Find all the segments where the mask value is 1
+        start_pos = None
+        for pos, val in enumerate(mask):
+            if val == 1 and start_pos is None:
+                start_pos = pos
+            if val == 0 and start_pos is not None:
+                end_pos = pos - 1
+                round_last_token_mask[i, end_pos] = True
+                start_pos = None
+        
+        if start_pos is not None:
+            end_pos = len(mask) - 1
+            round_last_token_mask[i, end_pos] = True
+    return round_last_token_mask

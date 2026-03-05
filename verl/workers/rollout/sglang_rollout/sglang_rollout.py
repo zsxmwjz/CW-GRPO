@@ -71,6 +71,7 @@ from verl.workers.rollout.schemas import (
 from verl.workers.rollout.sglang_rollout.http_server_engine import AsyncHttpServerAdapter
 from verl.workers.rollout.sglang_rollout.utils import broadcast_pyobj, get_named_tensor_buckets
 from verl.workers.rollout.utils import is_valid_ipv6_address
+from verl.workers.rollout.sglang_rollout.utils import get_round_last_token_mask
 
 try:
     from sglang.srt.function_call.function_call_parser import FunctionCallParser
@@ -864,8 +865,8 @@ class SGLangRollout(BaseRollout):
             elif _req.state == AsyncRolloutRequestStateEnum.TOOL_CALLING:
                 if _req.messages[-1].tool_calls is not None:
                     parsed_tool_calls = _req.messages[-1].tool_calls
-                    if self.config.skip_tokenizer_init:
-                        _req.messages[-1].tool_calls = None
+                    # if self.config.skip_tokenizer_init:
+                    #     _req.messages[-1].tool_calls = None
                     tool_call_results = await asyncio.gather(
                         *[
                             self._tool_map[tool_call.function.name].execute(
@@ -1204,6 +1205,7 @@ class SGLangRollout(BaseRollout):
         prompt_position_ids, response_position_ids = [], []
         response_loss_mask = []
         messages = []
+        num_turns = []
         reward_scores = []
         multi_modal_inputs = []
         request_ids = []
@@ -1245,7 +1247,9 @@ class SGLangRollout(BaseRollout):
             prompt_position_ids.append(req.prompt_position_ids.to(tgt_device).squeeze(0))
             response_position_ids.append(req.response_position_ids.to(tgt_device).squeeze(0))
             response_loss_mask.append(req.response_loss_mask.to(tgt_device).squeeze(0))
-            messages.append({"messages": req.messages})
+            # Convert Message objects into dictionaries to ensure that information such as tool_calls will not be lost during serialization.
+            messages.append({"messages": [msg.model_dump() for msg in req.messages]})
+            num_turns.append(len(req.messages)//2)
             reward_scores.append(req.reward_scores)
             multi_modal_inputs.append(req.multi_modal_inputs)
             request_ids.append(req.request_id)
@@ -1336,6 +1340,7 @@ class SGLangRollout(BaseRollout):
                 "prompts": prompt_ids,
                 "responses": response_ids,
                 "response_mask": response_loss_mask,
+                "round_last_token_mask": get_round_last_token_mask(response_loss_mask),
                 "input_ids": input_ids,  # here input_ids become the whole sentences
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,
@@ -1350,6 +1355,7 @@ class SGLangRollout(BaseRollout):
             "messages": np.array(messages),
             "reward_scores": np.array(reward_scores),
             "request_id": np.array(request_ids),
+            "__num_turns__": np.array(num_turns),
         }
 
         is_multimodal = isinstance(self.processing_class, ProcessorMixin) and (
