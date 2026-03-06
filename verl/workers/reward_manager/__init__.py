@@ -20,6 +20,7 @@ from .prime import PrimeRewardManager
 
 from .cw_grpo import CWGRPORewardManager
 from .mt_ppo import MTPPORewardManager
+from .r3_rag import R3RAGRewardManager
 
 # Note(haibin.lin): no need to include all reward managers here in case of complicated dependencies
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "PrimeRewardManager",
     "CWGRPORewardManager",
     "MTPPORewardManager",
+    "R3RAGRewardManager",
     "register",
     "get_reward_manager_cls",
 ]
