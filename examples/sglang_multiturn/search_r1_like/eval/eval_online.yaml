@@ -1,0 +1,21 @@
+# Config for online evaluation
+
+service:
+  base_url: http://<your-base-url>/v1
+  model: <your-model-name>
+  api_key: <your-api-key>
+  temperature: 1.0
+  top_k: null
+  top_p: 1
+  max_tokens: 1024
+  max_parallel: 40
+
+data:
+  path: /path/to/project/data/search-r1/filtered_test.parquet
+  prompt_key: prompt
+  n_samples: 4
+  max_assistant_turns: 10
+
+tool_config_path: /path/to/project/examples/sglang_multiturn/config/tool_config/search_tool_config.yaml
+
+output_path: /path/to/project/examples/sglang_multiturn/search_r1_like/eval/outputs/<your-model-name>.jsonl
