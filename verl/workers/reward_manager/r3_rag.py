@@ -139,7 +139,6 @@ class R3RAGRewardManager(AbstractRewardManager):
         self.reward_fn_key = reward_fn_key
         
         self.max_workers = kwargs.get("max_llm_judge_workers", 64)
-        self.level = kwargs.get("level", "trace")
 
     def __call__(
         self, data: DataProto, return_dict: bool = False

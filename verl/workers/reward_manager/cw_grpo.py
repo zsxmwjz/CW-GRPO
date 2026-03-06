@@ -113,7 +113,7 @@ class CWGRPORewardManager(AbstractRewardManager):
             
             reward_tensor[i, valid_response_length - 1] = answer_reward
 
-            # Process messages and prepare llm_judge tasks
+            # Process messages
             messages_dict = data_item.non_tensor_batch.get("messages", {})
             if isinstance(messages_dict, dict) and "messages" in messages_dict:
                 messages = messages_dict["messages"]
@@ -182,7 +182,7 @@ class CWGRPORewardManager(AbstractRewardManager):
                         print(f"llm_judge task failed for sample {sample_idx}, task {task_idx}: {e}")
                         judge_results_dict[(sample_idx, task_idx)] = {"retrieval_reward": 0, "thinking_reward": 0, "reason": ""}
 
-        # Process the results and calculate the rewards
+        # Collect the judge results
         for i, item_info in enumerate(data_items_info):
             valid_response_length = item_info["valid_response_length"]
             answer_reward = item_info["answer_reward"]
