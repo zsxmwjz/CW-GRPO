@@ -18,7 +18,7 @@
 
 import argparse
 
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 
 parser = argparse.ArgumentParser(description="Download files from a Hugging Face dataset repository.")
 parser.add_argument("--repo_id", type=str, default="PeterJinGo/wiki-18-e5-index", help="Hugging Face repository ID")
@@ -41,4 +41,11 @@ hf_hub_download(
     filename="wiki-18.jsonl.gz",
     repo_type="dataset",
     local_dir=args.save_path,
+)
+
+repo_id = "intfloat/e5-base-v2"
+snapshot_download(
+    repo_id=repo_id,
+    local_dir=args.save_path+"/e5-base-v2",
+    repo_type="model",
 )
