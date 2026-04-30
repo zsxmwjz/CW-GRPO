@@ -1,4 +1,6 @@
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
+# Modifications Copyright 2026 CW-GRPO Contributors
+# NOTE: This file has been modified from the original verl v0.6.1 distribution.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
