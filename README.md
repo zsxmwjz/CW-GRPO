@@ -26,12 +26,12 @@ Main Results:
 
 ### Installation
 
-To install the local dense retriever environment (for search agent retrieval), run:
-```bash
-bash examples/sglang_multiturn/search_r1_like/local_dense_retriever/install.sh
-```
-
 To install the verl environment for training and evaluation, please refer to the official verl documentation: [Installation Guide (web)](https://verl.readthedocs.io/en/latest/start/install.html) or see the local installation guide at [docs/start/install.rst](./docs/start/install.rst) in this repository.
+
+To set up the local dense retriever environment needed for search agent retrieval, and to download the train and test datasets, simply run:
+```bash
+bash examples/sglang_multiturn/search_r1_like/local_dense_retriever/setup.sh
+```
 
 ### Training
 
