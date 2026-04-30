@@ -1,4 +1,6 @@
-# Copyright 2026 CW-GRPO Contributors
+# Copyright 2024 Bytedance Ltd. and/or its affiliates
+# Modifications Copyright 2026 CW-GRPO Contributors
+# NOTE: This file has been modified from https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/data_process/qa_search_test_merge.py
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Adapted from https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/data_process/qa_search_test_merge.py
 """
 Preprocess the QA dataset to parquet format
 """
@@ -54,6 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--data_sources', default='nq')
     parser.add_argument('--agentgym_json_path', default='data/agentgym/searchqa_test.json')
+    parser.add_argument('--save_origin_data', action='store_true')
 
     args = parser.parse_args()
 
@@ -114,8 +116,10 @@ if __name__ == '__main__':
         all_dataset.append(test_dataset)
 
     local_dir = args.local_dir
+    os.makedirs(local_dir, exist_ok=True)
 
     all_test_dataset = datasets.concatenate_datasets(all_dataset)
-    # all_test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    if args.save_origin_data:
+        all_test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
     filtered_test_dataset = all_test_dataset.select(agentgym_test_indices)
     filtered_test_dataset.to_parquet(os.path.join(local_dir, 'filtered_test.parquet'))
