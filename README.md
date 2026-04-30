@@ -16,8 +16,6 @@ We propose Contribution Weighted Group Relative Policy Optimization (CW-GRPO), a
 
 CW-GRPO integrates process supervision into GRPO by assigning round-level contributions within search trajectories and using them to reweight trajectory-level advantages, enabling finer-grained credit assignment in multi-round search.
 
-Compared to outcome-only or dense process supervision, our method is more stable, efficient, and scalable, especially for long-horizon and multi-hop reasoning tasks.
-
 Experiments show that CW-GRPO outperforms outcome-supervised and process-supervised baselines on the identical backbone.
 
 Main Results:
