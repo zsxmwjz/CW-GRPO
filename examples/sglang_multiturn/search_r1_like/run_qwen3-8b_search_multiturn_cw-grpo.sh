@@ -37,7 +37,7 @@ CUDA_LAUNCH_BLOCKING=1 HYDRA_FULL_ERROR=1 PYTORCH_CUDA_ALLOC_CONF=expandable_seg
     data.max_response_length=8192 \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
-    reward_model.reward_manager=process \
+    reward_model.reward_manager=cw-grpo \
     +reward_model.reward_kwargs.max_llm_judge_workers=128 \
     actor_rollout_ref.model.path=$base_model_path \
     actor_rollout_ref.actor.optim.lr=1e-6 \
