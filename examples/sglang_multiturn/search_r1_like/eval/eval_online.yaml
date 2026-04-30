@@ -13,6 +13,7 @@ service:
 data:
   path: /path/to/project/data/search-r1/filtered_test.parquet
   prompt_key: prompt
+  use_custom_prompt: False
   n_samples: 4
   max_assistant_turns: 10
 

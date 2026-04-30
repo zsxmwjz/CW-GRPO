@@ -500,6 +500,7 @@ def main(config):
     
     data_path = config.data.path
     prompt_key = config.data.prompt_key
+    use_custom_prompt = config.data.use_custom_prompt
     n_samples = config.data.n_samples
     max_assistant_turns = config.data.max_assistant_turns
     
@@ -521,9 +522,14 @@ def main(config):
     # Convert numpy arrays in chat_list to lists
     chat_list = [chat.tolist() if isinstance(chat, np.ndarray) else chat for chat in chat_list]
 
-    for chat in chat_list:
-        chat[0] = {"role": "system", "content": chat[0]["content"]}
-        chat[1] = {"role": "user", "content": new_user_prefix + '\n\n' + chat[1]["content"][chat[1]["content"].rfind("Question:"):]}
+    if use_custom_prompt:
+        for chat in chat_list:
+            chat[0] = {"role": "system", "content": chat[0]["content"]}
+            chat[1] = {"role": "user", "content": new_user_prefix + '\n\n' + chat[1]["content"][chat[1]["content"].rfind("Question:"):]}
+    else:
+        for chat in chat_list:
+            chat[0] = {"role": "system", "content": chat[0]["content"]}
+            chat[1] = {"role": "user", "content": chat[1]["content"]}
     
     reward_models = dataset["reward_model"].tolist()
     ground_truths = [reward_model["ground_truth"] for reward_model in reward_models]
